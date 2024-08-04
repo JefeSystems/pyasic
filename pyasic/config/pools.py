@@ -137,7 +137,7 @@ class Pool(MinerConfigValue):
     def as_bitaxe(self, user_suffix: str = None) -> dict:
         return {
             "stratumURL": self.url,
-            "stratumUser": f"{self.user}{user_suffix}",
+            "stratumUser": f"{self.user}",
             "stratumPassword": self.password,
         }
 
