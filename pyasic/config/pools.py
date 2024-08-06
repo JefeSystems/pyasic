@@ -135,6 +135,8 @@ class Pool(MinerConfigValue):
         return {"url": self.url, "user": self.user, "pass": self.password}
 
     def as_bitaxe(self, user_suffix: str = None) -> dict:
+        if self.url.startswith("stratum+tcp://"):
+            url = self.url[13:]
         return {
             "stratumURL": self.url,
             "stratumUser": f"{self.user}",
