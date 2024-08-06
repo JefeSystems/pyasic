@@ -140,7 +140,7 @@ class Pool(MinerConfigValue):
             url = self.url[14:]
         return {
             "stratumURL": url.split(":")[0],
-            "stratumPort": url.split(":")[1],
+            "stratumPort": int(url.split(":")[1]),
             "stratumUser": f"{self.user}",
             "stratumPassword": self.password,
         }
