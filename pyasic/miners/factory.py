@@ -38,6 +38,7 @@ from pyasic.miners.bitaxe import *
 from pyasic.miners.blockminer import *
 from pyasic.miners.device.makes import *
 from pyasic.miners.goldshell import *
+from pyasic.miners.iceriver import *
 from pyasic.miners.innosilicon import *
 from pyasic.miners.whatsminer import *
 
@@ -56,6 +57,7 @@ class MinerTypes(enum.Enum):
     AURADINE = 10
     MARATHON = 11
     BITAXE = 12
+    ICERIVER = 13
 
 
 MINER_CLASSES = {
@@ -330,6 +332,7 @@ MINER_CLASSES = {
         "AVALONMINER 1066": CGMinerAvalon1066,
         "AVALONMINER 1166PRO": CGMinerAvalon1166Pro,
         "AVALONMINER 1246": CGMinerAvalon1246,
+        "AVALONMINER NANO3": CGMinerAvalonNano3,
     },
     MinerTypes.INNOSILICON: {
         None: type("InnosiliconUnknown", (Innosilicon, InnosiliconMake), {}),
@@ -373,6 +376,7 @@ MINER_CLASSES = {
         "ANTMINER S19 PRO+ HYD.": BOSMinerS19ProPlusHydro,
         "ANTMINER T19": BOSMinerT19,
         "ANTMINER S21": BOSMinerS21,
+        "ANTMINER T21": BOSMinerT21,
     },
     MinerTypes.VNISH: {
         None: VNish,
@@ -450,6 +454,10 @@ MINER_CLASSES = {
         "BM1368": BitAxeSupra,
         "BM1366": BitAxeUltra,
         "BM1397": BitAxeMax,
+    },
+    MinerTypes.ICERIVER: {
+        None: type("IceRiverUnknown", (IceRiver, IceRiverMake), {}),
+        "KS2": IceRiverKS2,
     },
 }
 
@@ -623,6 +631,8 @@ class MinerFactory:
             return MinerTypes.INNOSILICON
         if "Miner UI" in web_text:
             return MinerTypes.AURADINE
+        if "<TITLE>用户界面</TITLE>" in web_text:
+            return MinerTypes.ICERIVER
 
     async def _get_miner_socket(self, ip: str) -> MinerTypes | None:
         commands = ["version", "devdetails"]
@@ -689,8 +699,6 @@ class MinerFactory:
             return MinerTypes.BRAIINS_OS
         if "BTMINER" in upper_data or "BITMICRO" in upper_data:
             return MinerTypes.WHATSMINER
-        if "VNISH" in upper_data or "DEVICE PATH" in upper_data:
-            return MinerTypes.VNISH
         if "HIVEON" in upper_data:
             return MinerTypes.HIVEON
         if "LUXMINER" in upper_data:
@@ -709,6 +717,8 @@ class MinerFactory:
             return MinerTypes.AVALONMINER
         if "GCMINER" in upper_data or "FLUXOS" in upper_data:
             return MinerTypes.AURADINE
+        if "VNISH" in upper_data or "DEVICE PATH" in upper_data:
+            return MinerTypes.VNISH
 
     async def send_web_command(
         self,
@@ -798,7 +808,9 @@ class MinerFactory:
         str_data = str_data.replace("info", "1nfo")
         str_data = str_data.replace("inf", "0")
         str_data = str_data.replace("1nfo", "info")
+        str_data = str_data.replace("nano", "n4no")
         str_data = str_data.replace("nan", "0")
+        str_data = str_data.replace("n4no", "nano")
         # fix whatever this garbage from avalonminers is `,"id":1}`
         if str_data.startswith(","):
             str_data = f"{{{str_data[1:]}"
@@ -898,10 +910,12 @@ class MinerFactory:
     async def get_miner_model_avalonminer(self, ip: str) -> str | None:
         sock_json_data = await self.send_api_command(ip, "version")
         try:
-            miner_model = sock_json_data["VERSION"][0]["PROD"]
+            miner_model = sock_json_data["VERSION"][0]["PROD"].upper()
             if "-" in miner_model:
                 miner_model = miner_model.split("-")[0]
-
+            if miner_model in ["AVALONNANO", "AVALON0O"]:
+                nano_subtype = sock_json_data["VERSION"][0]["MODEL"].upper()
+                miner_model = f"AVALONMINER {nano_subtype}"
             return miner_model
         except (TypeError, LookupError):
             pass
