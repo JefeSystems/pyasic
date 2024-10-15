@@ -926,8 +926,10 @@ class BOSer(BraiinsOSFirmware):
                 pass
 
         if grpc_hashboards is not None:
-            for board in grpc_hashboards["hashboards"]:
-                idx = int(board["id"]) - 1
+            grpc_boards = sorted(
+                grpc_hashboards["hashboards"], key=lambda x: int(x["id"])
+            )
+            for idx, board in enumerate(grpc_boards):
                 if board.get("chipsCount") is not None:
                     hashboards[idx].chips = board["chipsCount"]
                 if board.get("boardTemp") is not None:
@@ -1086,11 +1088,11 @@ class BOSer(BraiinsOSFirmware):
                     url=pool_info["url"],
                     user=pool_info["user"],
                     index=idx,
-                    accepted=pool_info["stats"]["acceptedShares"],
-                    rejected=pool_info["stats"]["rejectedShares"],
-                    get_failures=pool_info["stats"]["stale_shares"],
+                    accepted=pool_info["stats"].get("acceptedShares", 0),
+                    rejected=pool_info["stats"].get("rejectedShares", 0),
+                    get_failures=0,
                     remote_failures=0,
-                    active=pool_info["active"],
+                    active=pool_info.get("active", False),
                     alive=pool_info["alive"],
                 )
                 pools_data.append(pool_data)
