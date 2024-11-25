@@ -13,25 +13,28 @@
 #  See the License for the specific language governing permissions and         -
 #  limitations under the License.                                              -
 # ------------------------------------------------------------------------------
-from dataclasses import asdict, dataclass, field
 
-from pyasic.config.fans import FanModeConfig
-from pyasic.config.mining import MiningModeConfig
+from pydantic import BaseModel, Field
+
+from pyasic.config.fans import FanMode, FanModeConfig
+from pyasic.config.mining import MiningMode, MiningModeConfig
 from pyasic.config.mining.scaling import ScalingConfig
 from pyasic.config.pools import PoolConfig
 from pyasic.config.temperature import TemperatureConfig
 from pyasic.misc import merge_dicts
 
 
-@dataclass
-class MinerConfig:
+class MinerConfig(BaseModel):
     """Represents the configuration for a miner including pool configuration,
     fan mode, temperature settings, mining mode, and power scaling."""
 
-    pools: PoolConfig = field(default_factory=PoolConfig.default)
-    fan_mode: FanModeConfig = field(default_factory=FanModeConfig.default)
-    temperature: TemperatureConfig = field(default_factory=TemperatureConfig.default)
-    mining_mode: MiningModeConfig = field(default_factory=MiningModeConfig.default)
+    class Config:
+        arbitrary_types_allowed = True
+
+    pools: PoolConfig = Field(default_factory=PoolConfig.default)
+    fan_mode: FanMode = Field(default_factory=FanModeConfig.default)
+    temperature: TemperatureConfig = Field(default_factory=TemperatureConfig.default)
+    mining_mode: MiningMode = Field(default_factory=MiningModeConfig.default)
 
     def __getitem__(self, item):
         try:
@@ -41,7 +44,7 @@ class MinerConfig:
 
     def as_dict(self) -> dict:
         """Converts the MinerConfig object to a dictionary."""
-        return asdict(self)
+        return self.model_dump()
 
     def as_am_modern(self, user_suffix: str = None) -> dict:
         """Generates the configuration in the format suitable for modern Antminers."""
@@ -107,7 +110,7 @@ class MinerConfig:
         }
 
     def as_boser(self, user_suffix: str = None) -> dict:
-        """ "Generates the configuration in the format suitable for BOSer."""
+        """Generates the configuration in the format suitable for BOSer."""
         return {
             **self.fan_mode.as_boser(),
             **self.temperature.as_boser(),
@@ -147,6 +150,17 @@ class MinerConfig:
             **self.mining_mode.as_bitaxe(),
             **self.pools.as_bitaxe(user_suffix=user_suffix),
         }
+
+    def as_luxos(self, user_suffix: str = None) -> dict:
+        return {
+            **self.fan_mode.as_luxos(),
+            **self.temperature.as_luxos(),
+            **self.mining_mode.as_luxos(),
+            **self.pools.as_luxos(user_suffix=user_suffix),
+        }
+
+    def as_hammer(self, *args, **kwargs) -> dict:
+        return self.as_am_modern(*args, **kwargs)
 
     @classmethod
     def from_dict(cls, dict_conf: dict) -> "MinerConfig":
@@ -250,3 +264,25 @@ class MinerConfig:
             pools=PoolConfig.from_bitaxe(web_system_info),
             fan_mode=FanModeConfig.from_bitaxe(web_system_info),
         )
+
+    @classmethod
+    def from_iceriver(cls, web_userpanel: dict) -> "MinerConfig":
+        return cls(
+            pools=PoolConfig.from_iceriver(web_userpanel),
+        )
+
+    @classmethod
+    def from_luxos(
+        cls, rpc_tempctrl: dict, rpc_fans: dict, rpc_pools: dict, rpc_groups: dict
+    ) -> "MinerConfig":
+        return cls(
+            temperature=TemperatureConfig.from_luxos(rpc_tempctrl=rpc_tempctrl),
+            fan_mode=FanModeConfig.from_luxos(
+                rpc_tempctrl=rpc_tempctrl, rpc_fans=rpc_fans
+            ),
+            pools=PoolConfig.from_luxos(rpc_pools=rpc_pools, rpc_groups=rpc_groups),
+        )
+
+    @classmethod
+    def from_hammer(cls, *args, **kwargs) -> "MinerConfig":
+        return cls.from_am_modern(*args, **kwargs)

@@ -17,7 +17,7 @@
 from typing import Optional
 
 from pyasic import MinerConfig
-from pyasic.data import AlgoHashRate, HashUnit
+from pyasic.device.algorithm import AlgoHashRate
 from pyasic.errors import APIError
 from pyasic.miners.backends.bmminer import BMMiner
 from pyasic.miners.data import (
@@ -79,6 +79,10 @@ VNISH_DATA_LOC = DataLocations(
         str(DataOptions.IS_MINING): DataFunction(
             "_is_mining",
             [WebAPICommand("web_summary", "summary")],
+        ),
+        str(DataOptions.POOLS): DataFunction(
+            "_get_pools",
+            [RPCAPICommand("rpc_pools", "pools")],
         ),
     }
 )
@@ -203,8 +207,9 @@ class VNish(VNishFirmware, BMMiner):
 
         if rpc_summary is not None:
             try:
-                return AlgoHashRate.SHA256(
-                    rpc_summary["SUMMARY"][0]["GHS 5s"], HashUnit.SHA256.GH
+                return self.algo.hashrate(
+                    rate=float(rpc_summary["SUMMARY"][0]["GHS 5s"]),
+                    unit=self.algo.unit.GH,
                 ).into(self.algo.unit.default)
             except (LookupError, ValueError, TypeError):
                 pass
@@ -237,13 +242,17 @@ class VNish(VNishFirmware, BMMiner):
 
     async def _is_mining(self, web_summary: dict = None) -> Optional[bool]:
         if web_summary is None:
-            web_summary = await self.web.summary()
+            try:
+                web_summary = await self.web.summary()
+            except APIError:
+                pass
 
         if web_summary is not None:
             try:
                 is_mining = not web_summary["miner"]["miner_status"]["miner_state"] in [
                     "stopped",
                     "shutting-down",
+                    "failure",
                 ]
                 return is_mining
             except LookupError:

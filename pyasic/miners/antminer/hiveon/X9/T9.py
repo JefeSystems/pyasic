@@ -18,7 +18,8 @@ from typing import List, Optional
 
 import asyncssh
 
-from pyasic.data import AlgoHashRate, HashBoard, HashUnit
+from pyasic.data import HashBoard
+from pyasic.device.algorithm import AlgoHashRate, HashUnit
 from pyasic.errors import APIError
 from pyasic.miners.backends import Hiveon
 from pyasic.miners.data import DataFunction, DataLocations, DataOptions, RPCAPICommand
@@ -61,6 +62,10 @@ HIVEON_T9_DATA_LOC = DataLocations(
         str(DataOptions.UPTIME): DataFunction(
             "_get_uptime",
             [RPCAPICommand("rpc_stats", "stats")],
+        ),
+        str(DataOptions.POOLS): DataFunction(
+            "_get_pools",
+            [RPCAPICommand("rpc_pools", "pools")],
         ),
     }
 )
@@ -122,7 +127,7 @@ class HiveonT9(Hiveon, T9):
                 except (KeyError, IndexError):
                     pass
             hashboards[board].hashrate = AlgoHashRate.SHA256(
-                hashrate, HashUnit.SHA256.GH
+                rate=float(hashrate), unit=HashUnit.SHA256.GH
             ).into(self.algo.unit.default)
             hashboards[board].chips = chips
 
@@ -168,4 +173,4 @@ class HiveonT9(Hiveon, T9):
                         pass
 
             if not env_temp_list == []:
-                return round(float(sum(env_temp_list) / len(env_temp_list)), 2)
+                return round(sum(env_temp_list) / len(env_temp_list))

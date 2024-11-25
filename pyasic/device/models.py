@@ -1,18 +1,29 @@
 from enum import Enum
 
 
-class AntminerModels(str, Enum):
+class MinerModelType(str, Enum):
+    pass
+
+
+class AntminerModels(MinerModelType):
     D3 = "D3"
     HS3 = "HS3"
     L3Plus = "L3+"
+    KA3 = "KA3"
+    KS3 = "KS3"
     DR5 = "DR5"
+    KS5 = "KS5"
     L7 = "L7"
+    K7 = "K7"
+    D7 = "D7"
     E9Pro = "E9Pro"
     S9 = "S9"
     S9i = "S9i"
     S9j = "S9j"
     T9 = "T9"
+    D9 = "D9"
     Z15 = "Z15"
+    Z15Pro = "Z15 Pro"
     S17 = "S17"
     S17Plus = "S17+"
     S17Pro = "S17 Pro"
@@ -51,7 +62,7 @@ class AntminerModels(str, Enum):
         return self.value
 
 
-class WhatsminerModels(str, Enum):
+class WhatsminerModels(MinerModelType):
     M20V10 = "M20 V10"
     M20SV10 = "M20S V10"
     M20SV20 = "M20S V20"
@@ -220,6 +231,7 @@ class WhatsminerModels(str, Enum):
     M50VH60 = "M50 VH60"
     M50VH70 = "M50 VH70"
     M50VH80 = "M50 VH80"
+    M50VH90 = "M50 VH90"
     M50VJ10 = "M50 VJ10"
     M50VJ20 = "M50 VJ20"
     M50VJ30 = "M50 VJ30"
@@ -271,7 +283,7 @@ class WhatsminerModels(str, Enum):
         return self.value
 
 
-class AvalonminerModels(str, Enum):
+class AvalonminerModels(MinerModelType):
     Avalon721 = "Avalon 721"
     Avalon741 = "Avalon 741"
     Avalon761 = "Avalon 761"
@@ -290,15 +302,17 @@ class AvalonminerModels(str, Enum):
         return self.value
 
 
-class InnosiliconModels(str, Enum):
+class InnosiliconModels(MinerModelType):
     T3HPlus = "T3H+"
     A10X = "A10X"
+    A11 = "A11"
+    A11MX = "A11MX"
 
     def __str__(self):
         return self.value
 
 
-class GoldshellModels(str, Enum):
+class GoldshellModels(MinerModelType):
     CK5 = "CK5"
     HS5 = "HS5"
     KD5 = "KD5"
@@ -310,7 +324,7 @@ class GoldshellModels(str, Enum):
         return self.value
 
 
-class ePICModels(str, Enum):
+class ePICModels(MinerModelType):
     BM520i = "BlockMiner 520i"
     BM720i = "BlockMiner 720i"
 
@@ -318,7 +332,7 @@ class ePICModels(str, Enum):
         return self.value
 
 
-class AuradineModels(str, Enum):
+class AuradineModels(MinerModelType):
     AT1500 = "AT1500"
     AT2860 = "AT2860"
     AT2880 = "AT2880"
@@ -331,17 +345,33 @@ class AuradineModels(str, Enum):
         return self.value
 
 
-class BitAxeModels(str, Enum):
+class BitAxeModels(MinerModelType):
     BM1366 = "Ultra"
     BM1368 = "Supra"
     BM1397 = "Max"
+    BM1370 = "Gamma"
 
     def __str__(self):
         return self.value
 
 
-class IceRiverModels(str, Enum):
+class IceRiverModels(MinerModelType):
+    KS0 = "KS0"
+    KS1 = "KS1"
     KS2 = "KS2"
+    KS3 = "KS3"
+    KS3L = "KS3L"
+    KS3M = "KS3M"
+    KS5 = "KS5"
+    KS5L = "KS5L"
+    KS5M = "KS5M"
+
+    def __str__(self):
+        return self.value
+
+
+class HammerModels(MinerModelType):
+    D10 = "D10"
 
     def __str__(self):
         return self.value
@@ -357,3 +387,4 @@ class MinerModel:
     EPIC = ePICModels
     BITAXE = BitAxeModels
     ICERIVER = IceRiverModels
+    HAMMER = HammerModels

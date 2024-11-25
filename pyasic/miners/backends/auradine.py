@@ -18,7 +18,8 @@ from enum import Enum
 from typing import List, Optional
 
 from pyasic.config import MinerConfig
-from pyasic.data import AlgoHashRate, Fan, HashBoard, HashUnit
+from pyasic.data import Fan, HashBoard
+from pyasic.device.algorithm import AlgoHashRate
 from pyasic.errors import APIError
 from pyasic.miners.data import (
     DataFunction,
@@ -193,7 +194,14 @@ class Auradine(StockFirmware):
         for key in conf.keys():
             await self.web.send_command(command=key, **conf[key])
 
-    async def upgrade_firmware(self, *, url: str = None, version: str = "latest", keep_settings: bool = False, **kwargs) -> bool:
+    async def upgrade_firmware(
+        self,
+        *,
+        url: str = None,
+        version: str = "latest",
+        keep_settings: bool = False,
+        **kwargs,
+    ) -> bool:
         """
         Upgrade the firmware of the Auradine device.
 
@@ -209,7 +217,9 @@ class Auradine(StockFirmware):
             logging.info("Starting firmware upgrade process.")
 
             if not url and not version:
-                raise ValueError("Either URL or version must be provided for firmware upgrade.")
+                raise ValueError(
+                    "Either URL or version must be provided for firmware upgrade."
+                )
 
             if url:
                 result = await self.web.firmware_upgrade(url=url)
@@ -220,11 +230,15 @@ class Auradine(StockFirmware):
                 logging.info("Firmware upgrade process completed successfully.")
                 return True
             else:
-                logging.error(f"Firmware upgrade failed: {result.get('error', 'Unknown error')}")
+                logging.error(
+                    f"Firmware upgrade failed: {result.get('error', 'Unknown error')}"
+                )
                 return False
 
         except Exception as e:
-            logging.error(f"An error occurred during the firmware upgrade process: {str(e)}")
+            logging.error(
+                f"An error occurred during the firmware upgrade process: {str(e)}"
+            )
             return False
 
     ##################################################
@@ -279,8 +293,9 @@ class Auradine(StockFirmware):
 
         if rpc_summary is not None:
             try:
-                return AlgoHashRate.SHA256(
-                    rpc_summary["SUMMARY"][0]["MHS 5s"], HashUnit.SHA256.MH
+                return self.algo.hashrate(
+                    rate=float(rpc_summary["SUMMARY"][0]["MHS 5s"]),
+                    unit=self.algo.unit.MH,
                 ).into(self.algo.unit.default)
             except (LookupError, ValueError, TypeError):
                 pass
@@ -308,10 +323,10 @@ class Auradine(StockFirmware):
             try:
                 for board in rpc_devs["DEVS"]:
                     b_id = board["ID"] - 1
-                    hashboards[b_id].hashrate = AlgoHashRate.SHA256(
-                        board["MHS 5s"], HashUnit.SHA256.MH
+                    hashboards[b_id].hashrate = self.algo.hashrate(
+                        rate=float(board["MHS 5s"]), unit=self.algo.unit.MH
                     ).into(self.algo.unit.default)
-                    hashboards[b_id].temp = round(float(float(board["Temperature"])), 2)
+                    hashboards[b_id].temp = round(float(board["Temperature"]))
                     hashboards[b_id].missing = False
             except LookupError:
                 pass
@@ -377,7 +392,7 @@ class Auradine(StockFirmware):
         if web_fan is not None:
             try:
                 for fan in web_fan["Fan"]:
-                    fans.append(Fan(round(fan["Speed"])))
+                    fans.append(Fan(speed=round(fan["Speed"])))
             except LookupError:
                 pass
         return fans

@@ -15,14 +15,15 @@
 # ------------------------------------------------------------------------------
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from typing import TypeVar, Union
+
+from pydantic import Field
 
 from pyasic.config.base import MinerConfigOption, MinerConfigValue
 
 
-@dataclass
 class FanModeNormal(MinerConfigValue):
-    mode: str = field(init=False, default="normal")
+    mode: str = Field(init=False, default="normal")
     minimum_fans: int = 1
     minimum_speed: int = 0
 
@@ -83,10 +84,12 @@ class FanModeNormal(MinerConfigValue):
     def as_bitaxe(self) -> dict:
         return {"autoFanspeed": 1}
 
+    def as_luxos(self) -> dict:
+        return {"fanset": {"speed": -1, "min_fans": self.minimum_fans}}
 
-@dataclass
+
 class FanModeManual(MinerConfigValue):
-    mode: str = field(init=False, default="manual")
+    mode: str = Field(init=False, default="manual")
     speed: int = 100
     minimum_fans: int = 1
 
@@ -144,10 +147,12 @@ class FanModeManual(MinerConfigValue):
     def as_bitaxe(self) -> dict:
         return {"autoFanspeed": 0, "fanspeed": self.speed}
 
+    def as_luxos(self) -> dict:
+        return {"fanset": {"speed": self.speed, "min_fans": self.minimum_fans}}
 
-@dataclass
+
 class FanModeImmersion(MinerConfigValue):
-    mode: str = field(init=False, default="immersion")
+    mode: str = Field(init=False, default="immersion")
 
     @classmethod
     def from_dict(cls, dict_conf: dict | None) -> "FanModeImmersion":
@@ -166,6 +171,9 @@ class FanModeImmersion(MinerConfigValue):
 
     def as_mara(self) -> dict:
         return {"general-config": {"environment-profile": "OilImmersionCooling"}}
+
+    def as_luxos(self) -> dict:
+        return {"fanset": {"speed": 0, "min_fans": 0}}
 
 
 class FanModeConfig(MinerConfigOption):
@@ -264,7 +272,7 @@ class FanModeConfig(MinerConfigOption):
         keys = temperature_conf.keys()
         if "auto" in keys:
             if "minimumRequiredFans" in keys:
-                return cls.normal(temperature_conf["minimumRequiredFans"])
+                return cls.normal(minimum_fans=temperature_conf["minimumRequiredFans"])
             return cls.normal()
         if "manual" in keys:
             conf = {}
@@ -291,7 +299,9 @@ class FanModeConfig(MinerConfigOption):
             mode = web_config["general-config"]["environment-profile"]
             if mode == "AirCooling":
                 if web_config["advance-config"]["override-fan-control"]:
-                    return cls.manual(web_config["advance-config"]["fan-fixed-percent"])
+                    return cls.manual(
+                        speed=web_config["advance-config"]["fan-fixed-percent"]
+                    )
                 return cls.normal()
             return cls.immersion()
         except LookupError:
@@ -304,3 +314,29 @@ class FanModeConfig(MinerConfigOption):
             return cls.normal()
         else:
             return cls.manual(speed=web_system_info["fanspeed"])
+
+    @classmethod
+    def from_luxos(cls, rpc_fans: dict, rpc_tempctrl: dict):
+        try:
+            mode = rpc_tempctrl["TEMPCTRL"][0]["Mode"]
+            if mode == "Manual":
+                speed = rpc_fans["FANS"][0]["Speed"]
+                min_fans = rpc_fans["FANCTRL"][0]["MinFans"]
+                if min_fans == 0 and speed == 0:
+                    return cls.immersion()
+                return cls.manual(
+                    speed=speed,
+                    minimum_fans=min_fans,
+                )
+            return cls.normal(
+                minimum_fans=rpc_fans["FANCTRL"][0]["MinFans"],
+            )
+        except LookupError:
+            pass
+        return cls.default()
+
+
+FanMode = TypeVar(
+    "FanMode",
+    bound=Union[FanModeNormal, FanModeManual, FanModeImmersion],
+)

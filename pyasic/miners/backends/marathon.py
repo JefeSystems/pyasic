@@ -2,14 +2,15 @@ from typing import List, Optional
 
 from pyasic import MinerConfig
 from pyasic.config import MiningModeConfig
-from pyasic.data import AlgoHashRate, Fan, HashBoard, HashUnit
+from pyasic.data import Fan, HashBoard
+from pyasic.data.pools import PoolMetrics, PoolUrl
+from pyasic.device.algorithm import AlgoHashRate
 from pyasic.errors import APIError
 from pyasic.miners.data import DataFunction, DataLocations, DataOptions, WebAPICommand
 from pyasic.miners.device.firmware import MaraFirmware
 from pyasic.misc import merge_dicts
 from pyasic.rpc.marathon import MaraRPCAPI
 from pyasic.web.marathon import MaraWebAPI
-from pyasic.data.pools import PoolMetrics, PoolUrl
 
 MARA_DATA_LOC = DataLocations(
     **{
@@ -99,7 +100,7 @@ class MaraMiner(MaraFirmware):
 
     async def set_power_limit(self, wattage: int) -> bool:
         cfg = await self.get_config()
-        cfg.mining_mode = MiningModeConfig.power_tuning(wattage)
+        cfg.mining_mode = MiningModeConfig.power_tuning(power=wattage)
         await self.send_config(cfg)
         return True
 
@@ -178,14 +179,14 @@ class MaraMiner(MaraFirmware):
             try:
                 for hb in web_hashboards["hashboards"]:
                     idx = hb["index"]
-                    hashboards[idx].hashrate = AlgoHashRate.SHA256(
-                        hb["hashrate_average"], HashUnit.SHA256.GH
+                    hashboards[idx].hashrate = self.algo.hashrate(
+                        rate=float(hb["hashrate_average"]), unit=self.algo.unit.GH
                     ).into(self.algo.unit.default)
                     hashboards[idx].temp = round(
-                        sum(hb["temperature_pcb"]) / len(hb["temperature_pcb"]), 2
+                        sum(hb["temperature_pcb"]) / len(hb["temperature_pcb"])
                     )
                     hashboards[idx].chip_temp = round(
-                        sum(hb["temperature_chip"]) / len(hb["temperature_chip"]), 2
+                        sum(hb["temperature_chip"]) / len(hb["temperature_chip"])
                     )
                     hashboards[idx].chips = hb["asic_num"]
                     hashboards[idx].serial_number = hb["serial_number"]
@@ -242,8 +243,8 @@ class MaraMiner(MaraFirmware):
 
         if web_brief is not None:
             try:
-                return AlgoHashRate.SHA256(
-                    web_brief["hashrate_realtime"], HashUnit.SHA256.TH
+                return self.algo.hashrate(
+                    rate=float(web_brief["hashrate_realtime"]), unit=self.algo.unit.TH
                 ).into(self.algo.unit.default)
             except LookupError:
                 pass
@@ -259,7 +260,7 @@ class MaraMiner(MaraFirmware):
             fans = []
             for n in range(self.expected_fans):
                 try:
-                    fans.append(Fan(web_fans["fans"][n]["current_speed"]))
+                    fans.append(Fan(speed=web_fans["fans"][n]["current_speed"]))
                 except (IndexError, KeyError):
                     pass
             return fans
@@ -290,8 +291,8 @@ class MaraMiner(MaraFirmware):
 
         if web_brief is not None:
             try:
-                return AlgoHashRate.SHA256(
-                    web_brief["hashrate_ideal"], HashUnit.SHA256.GH
+                return self.algo.hashrate(
+                    rate=float(web_brief["hashrate_ideal"]), unit=self.algo.unit.GH
                 ).into(self.algo.unit.default)
             except LookupError:
                 pass
@@ -319,11 +320,14 @@ class MaraMiner(MaraFirmware):
                 return []
 
         active_pool_index = None
-        highest_priority = float('inf')
+        highest_priority = float("inf")
 
         for pool_info in web_pools:
-            if pool_info.get("status") == "Alive" and pool_info.get("priority", float('inf')) < highest_priority:
-                highest_priority = pool_info.get["priority"]
+            if (
+                pool_info.get("status") == "Alive"
+                and pool_info.get("priority", float("inf")) < highest_priority
+            ):
+                highest_priority = pool_info["priority"]
                 active_pool_index = pool_info["index"]
 
         pools_data = []

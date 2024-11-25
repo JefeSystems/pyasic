@@ -20,6 +20,7 @@ import enum
 import ipaddress
 import json
 import re
+import warnings
 from typing import Any, AsyncGenerator, Callable
 
 import anyio
@@ -31,13 +32,12 @@ from pyasic.miners.antminer import *
 from pyasic.miners.auradine import *
 from pyasic.miners.avalonminer import *
 from pyasic.miners.backends import *
-from pyasic.miners.backends.bitaxe import BitAxe
-from pyasic.miners.backends.unknown import UnknownMiner
 from pyasic.miners.base import AnyMiner
 from pyasic.miners.bitaxe import *
 from pyasic.miners.blockminer import *
 from pyasic.miners.device.makes import *
 from pyasic.miners.goldshell import *
+from pyasic.miners.hammer import *
 from pyasic.miners.iceriver import *
 from pyasic.miners.innosilicon import *
 from pyasic.miners.whatsminer import *
@@ -58,6 +58,7 @@ class MinerTypes(enum.Enum):
     MARATHON = 11
     BITAXE = 12
     ICERIVER = 13
+    HAMMER = 14
 
 
 MINER_CLASSES = {
@@ -66,14 +67,21 @@ MINER_CLASSES = {
         "ANTMINER D3": CGMinerD3,
         "ANTMINER HS3": BMMinerHS3,
         "ANTMINER L3+": BMMinerL3Plus,
+        "ANTMINER KA3": BMMinerKA3,
+        "ANTMINER KS3": BMMinerKS3,
         "ANTMINER DR5": CGMinerDR5,
+        "ANTMINER KS5": BMMinerKS5,
         "ANTMINER L7": BMMinerL7,
+        "ANTMINER K7": BMMinerK7,
+        "ANTMINER D7": BMMinerD7,
         "ANTMINER E9 PRO": BMMinerE9Pro,
+        "ANTMINER D9": BMMinerD9,
         "ANTMINER S9": BMMinerS9,
         "ANTMINER S9I": BMMinerS9i,
         "ANTMINER S9J": BMMinerS9j,
         "ANTMINER T9": BMMinerT9,
         "ANTMINER Z15": CGMinerZ15,
+        "ANTMINER Z15 PRO": BMMinerZ15Pro,
         "ANTMINER S17": BMMinerS17,
         "ANTMINER S17+": BMMinerS17Plus,
         "ANTMINER S17 PRO": BMMinerS17Pro,
@@ -271,6 +279,7 @@ MINER_CLASSES = {
         "M50VH60": BTMinerM50VH60,
         "M50VH70": BTMinerM50VH70,
         "M50VH80": BTMinerM50VH80,
+        "M50VH90": BTMinerM50VH90,
         "M50VJ10": BTMinerM50VJ10,
         "M50VJ20": BTMinerM50VJ20,
         "M50VJ30": BTMinerM50VJ30,
@@ -338,6 +347,8 @@ MINER_CLASSES = {
         None: type("InnosiliconUnknown", (Innosilicon, InnosiliconMake), {}),
         "T3H+": InnosiliconT3HPlus,
         "A10X": InnosiliconA10X,
+        "A11": InnosiliconA11,
+        "A11MX": InnosiliconA11MX,
     },
     MinerTypes.GOLDSHELL: {
         None: type("GoldshellUnknown", (GoldshellMiner, GoldshellMake), {}),
@@ -390,6 +401,7 @@ MINER_CLASSES = {
         "ANTMINER S19 PRO": VNishS19Pro,
         "ANTMINER S19J": VNishS19j,
         "ANTMINER S19J PRO": VNishS19jPro,
+        "ANTMINER S19J PRO BB": VNishS19jPro,
         "ANTMINER S19A": VNishS19a,
         "ANTMINER S19A PRO": VNishS19aPro,
         "ANTMINER S19 PRO HYD.": VNishS19ProHydro,
@@ -454,10 +466,23 @@ MINER_CLASSES = {
         "BM1368": BitAxeSupra,
         "BM1366": BitAxeUltra,
         "BM1397": BitAxeMax,
+        "BM1370": BitAxeGamma,
     },
     MinerTypes.ICERIVER: {
         None: type("IceRiverUnknown", (IceRiver, IceRiverMake), {}),
+        "KS0": IceRiverKS0,
+        "KS1": IceRiverKS1,
         "KS2": IceRiverKS2,
+        "KS3": IceRiverKS3,
+        "KS3L": IceRiverKS3L,
+        "KS3M": IceRiverKS3M,
+        "KS5": IceRiverKS5,
+        "KS5L": IceRiverKS5L,
+        "KS5M": IceRiverKS5M,
+    },
+    MinerTypes.HAMMER: {
+        None: type("HammerUnknown", (BlackMiner, HammerMake), {}),
+        "HAMMER D10": HammerD10,
     },
 }
 
@@ -536,6 +561,8 @@ class MinerFactory:
                 MinerTypes.AURADINE: self.get_miner_model_auradine,
                 MinerTypes.MARATHON: self.get_miner_model_marathon,
                 MinerTypes.BITAXE: self.get_miner_model_bitaxe,
+                MinerTypes.ICERIVER: self.get_miner_model_iceriver,
+                MinerTypes.HAMMER: self.get_miner_model_hammer,
             }
             fn = miner_model_fns.get(miner_type)
 
@@ -607,6 +634,10 @@ class MinerFactory:
             "www-authenticate", ""
         ):
             return MinerTypes.ANTMINER
+        if web_resp.status_code == 401 and 'realm="blackMiner' in web_resp.headers.get(
+            "www-authenticate", ""
+        ):
+            return MinerTypes.HAMMER
         if len(web_resp.history) > 0:
             history_resp = web_resp.history[0]
             if (
@@ -617,6 +648,10 @@ class MinerFactory:
                 return MinerTypes.WHATSMINER
         if "Braiins OS" in web_text:
             return MinerTypes.BRAIINS_OS
+        if "Luxor Firmware" in web_text:
+            return MinerTypes.LUX_OS
+        if "<TITLE>用户界面</TITLE>" in web_text:
+            return MinerTypes.ICERIVER
         if "AxeOS" in web_text:
             return MinerTypes.BITAXE
         if "cloud-box" in web_text:
@@ -631,8 +666,6 @@ class MinerFactory:
             return MinerTypes.INNOSILICON
         if "Miner UI" in web_text:
             return MinerTypes.AURADINE
-        if "<TITLE>用户界面</TITLE>" in web_text:
-            return MinerTypes.ICERIVER
 
     async def _get_miner_socket(self, ip: str) -> MinerTypes | None:
         commands = ["version", "devdetails"]
@@ -699,10 +732,10 @@ class MinerFactory:
             return MinerTypes.BRAIINS_OS
         if "BTMINER" in upper_data or "BITMICRO" in upper_data:
             return MinerTypes.WHATSMINER
-        if "HIVEON" in upper_data:
-            return MinerTypes.HIVEON
         if "LUXMINER" in upper_data:
             return MinerTypes.LUX_OS
+        if "HIVEON" in upper_data:
+            return MinerTypes.HIVEON
         if "KAONSU" in upper_data:
             return MinerTypes.MARATHON
         if "ANTMINER" in upper_data and "DEVDETAILS" not in upper_data:
@@ -713,11 +746,13 @@ class MinerFactory:
             or "BFGMINER" in upper_data
         ):
             return MinerTypes.GOLDSHELL
+        if "INNOMINER" in upper_data:
+            return MinerTypes.INNOSILICON
         if "AVALON" in upper_data:
             return MinerTypes.AVALONMINER
         if "GCMINER" in upper_data or "FLUXOS" in upper_data:
             return MinerTypes.AURADINE
-        if "VNISH" in upper_data or "DEVICE PATH" in upper_data:
+        if "VNISH" in upper_data:
             return MinerTypes.VNISH
 
     async def send_web_command(
@@ -805,12 +840,8 @@ class MinerFactory:
         # fix an error with a btminer return having a missing comma. (2023-01-06 version)
         str_data = str_data.replace('""temp0', '","temp0')
         # fix an error with Avalonminers returning inf and nan
-        str_data = str_data.replace("info", "1nfo")
-        str_data = str_data.replace("inf", "0")
-        str_data = str_data.replace("1nfo", "info")
-        str_data = str_data.replace("nano", "n4no")
-        str_data = str_data.replace("nan", "0")
-        str_data = str_data.replace("n4no", "nano")
+        str_data = str_data.replace('"inf"', "0")
+        str_data = str_data.replace('"nan"', "0")
         # fix whatever this garbage from avalonminers is `,"id":1}`
         if str_data.startswith(","):
             str_data = f"{{{str_data[1:]}"
@@ -835,6 +866,11 @@ class MinerFactory:
             return MINER_CLASSES[miner_type][str(miner_model).upper()](ip)
         except LookupError:
             if miner_type in MINER_CLASSES:
+                if miner_model is not None:
+                    warnings.warn(
+                        f"Partially supported miner found: {miner_model}, please open an issue with miner data "
+                        f"and this model on GitHub (https://github.com/UpstreamData/pyasic/issues)."
+                    )
                 return MINER_CLASSES[miner_type][None](ip)
             return UnknownMiner(str(ip))
 
@@ -925,13 +961,34 @@ class MinerFactory:
             async with httpx.AsyncClient(transport=settings.transport()) as session:
                 auth_req = await session.post(
                     f"http://{ip}/api/auth",
-                    data={"username": "admin", "password": "admin"},
+                    data={
+                        "username": "admin",
+                        "password": settings.get(
+                            "default_innosilicon_web_password", "admin"
+                        ),
+                    },
                 )
                 auth = auth_req.json()["jwt"]
+        except (httpx.HTTPError, LookupError):
+            return
 
+        try:
+            async with httpx.AsyncClient(transport=settings.transport()) as session:
                 web_data = (
                     await session.post(
                         f"http://{ip}/api/type",
+                        headers={"Authorization": "Bearer " + auth},
+                        data={},
+                    )
+                ).json()
+                return web_data["type"]
+        except (httpx.HTTPError, LookupError):
+            pass
+        try:
+            async with httpx.AsyncClient(transport=settings.transport()) as session:
+                web_data = (
+                    await session.post(
+                        f"http://{ip}/overview",
                         headers={"Authorization": "Bearer " + auth},
                         data={},
                     )
@@ -1047,6 +1104,54 @@ class MinerFactory:
             miner_model = web_json_data["ASICModel"]
             if miner_model == "":
                 return None
+
+            return miner_model
+        except (TypeError, LookupError):
+            pass
+
+    async def get_miner_model_iceriver(self, ip: str) -> str | None:
+        async with httpx.AsyncClient(transport=settings.transport()) as client:
+            try:
+                # auth
+                await client.post(
+                    f"http://{ip}/user/loginpost",
+                    params={
+                        "post": "6",
+                        "user": "admin",
+                        "pwd": settings.get(
+                            "default_iceriver_web_password", "12345678"
+                        ),
+                    },
+                )
+            except httpx.HTTPError:
+                return None
+            try:
+                resp = await client.post(
+                    f"http://{ip}:/user/userpanel", params={"post": "4"}
+                )
+                if not resp.status_code == 200:
+                    return
+                result = resp.json()
+                software_ver = result["data"]["softver1"]
+                split_ver = software_ver.split("_")
+                if split_ver[-1] == "miner":
+                    miner_ver = split_ver[-2]
+                else:
+                    miner_ver = split_ver[-1].replace("miner", "")
+                return miner_ver.upper()
+            except httpx.HTTPError:
+                pass
+
+    async def get_miner_model_hammer(self, ip: str) -> str | None:
+        auth = httpx.DigestAuth(
+            "root", settings.get("default_hammer_web_password", "root")
+        )
+        web_json_data = await self.send_web_command(
+            ip, "/cgi-bin/get_system_info.cgi", auth=auth
+        )
+
+        try:
+            miner_model = web_json_data["minertype"]
 
             return miner_model
         except (TypeError, LookupError):

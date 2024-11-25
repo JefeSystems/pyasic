@@ -15,8 +15,9 @@
 # ------------------------------------------------------------------------------
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from enum import Enum
+
+from pydantic import BaseModel
 
 
 class MinerConfigOption(Enum):
@@ -63,6 +64,9 @@ class MinerConfigOption(Enum):
     def as_bitaxe(self) -> dict:
         return self.value.as_bitaxe()
 
+    def as_luxos(self) -> dict:
+        return self.value.as_luxos()
+
     def __call__(self, *args, **kwargs):
         return self.value(*args, **kwargs)
 
@@ -77,14 +81,13 @@ class MinerConfigOption(Enum):
             raise KeyError
 
 
-@dataclass
-class MinerConfigValue:
+class MinerConfigValue(BaseModel):
     @classmethod
     def from_dict(cls, dict_conf: dict | None):
         return cls()
 
     def as_dict(self) -> dict:
-        return asdict(self)
+        return self.model_dump()
 
     def as_am_modern(self) -> dict:
         return {}
@@ -123,6 +126,9 @@ class MinerConfigValue:
         return {}
 
     def as_bitaxe(self) -> dict:
+        return {}
+
+    def as_luxos(self) -> dict:
         return {}
 
     def __getitem__(self, item):

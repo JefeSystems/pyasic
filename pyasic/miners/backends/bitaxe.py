@@ -1,8 +1,9 @@
 from typing import List, Optional
 
 from pyasic import APIError, MinerConfig
-from pyasic.data import AlgoHashRate, Fan, HashBoard, HashUnit
-from pyasic.device import MinerFirmware
+from pyasic.data import Fan, HashBoard
+from pyasic.device.algorithm import AlgoHashRate
+from pyasic.device.firmware import MinerFirmware
 from pyasic.miners.base import BaseMiner
 from pyasic.miners.data import DataFunction, DataLocations, DataOptions, WebAPICommand
 from pyasic.web.bitaxe import BitAxeWebAPI
@@ -39,6 +40,10 @@ BITAXE_DATA_LOC = DataLocations(
         ),
         str(DataOptions.API_VERSION): DataFunction(
             "_get_api_ver",
+            [WebAPICommand("web_system_info", "system/info")],
+        ),
+        str(DataOptions.MAC): DataFunction(
+            "_get_mac",
             [WebAPICommand("web_system_info", "system/info")],
         ),
     }
@@ -89,8 +94,8 @@ class BitAxe(BaseMiner):
 
         if web_system_info is not None:
             try:
-                return AlgoHashRate.SHA256(
-                    web_system_info["hashRate"], HashUnit.SHA256.GH
+                return self.algo.hashrate(
+                    rate=float(web_system_info["hashRate"]), unit=self.algo.unit.GH
                 ).into(self.algo.unit.default)
             except KeyError:
                 pass
@@ -119,8 +124,9 @@ class BitAxe(BaseMiner):
             try:
                 return [
                     HashBoard(
-                        hashrate=AlgoHashRate.SHA256(
-                            web_system_info["hashRate"], HashUnit.SHA256.GH
+                        hashrate=self.algo.hashrate(
+                            rate=float(web_system_info["hashRate"]),
+                            unit=self.algo.unit.GH,
                         ).into(self.algo.unit.default),
                         chip_temp=web_system_info.get("temp"),
                         temp=web_system_info.get("temp"),
@@ -185,5 +191,18 @@ class BitAxe(BaseMiner):
         if web_system_info is not None:
             try:
                 return web_system_info["version"]
+            except KeyError:
+                pass
+
+    async def _get_mac(self, web_system_info: dict = None) -> Optional[str]:
+        if web_system_info is None:
+            try:
+                web_system_info = await self.web.system_info()
+            except APIError:
+                pass
+
+        if web_system_info is not None:
+            try:
+                return web_system_info["macAddr"].upper()
             except KeyError:
                 pass

@@ -15,7 +15,8 @@
 # ------------------------------------------------------------------------------
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import field
+from typing import TypeVar, Union
 
 from pyasic import settings
 from pyasic.config.base import MinerConfigOption, MinerConfigValue
@@ -34,11 +35,10 @@ from pyasic.web.braiins_os.proto.braiins.bos.v1 import (
     TunerPerformanceMode,
 )
 
-from .algo import TunerAlgo
+from .algo import TunerAlgo, TunerAlgoType
 from .scaling import ScalingConfig
 
 
-@dataclass
 class MiningModeNormal(MinerConfigValue):
     mode: str = field(init=False, default="normal")
 
@@ -70,8 +70,10 @@ class MiningModeNormal(MinerConfigValue):
             }
         }
 
+    def as_luxos(self) -> dict:
+        return {"autotunerset": {"enabled": False}}
 
-@dataclass
+
 class MiningModeSleep(MinerConfigValue):
     mode: str = field(init=False, default="sleep")
 
@@ -104,7 +106,6 @@ class MiningModeSleep(MinerConfigValue):
         }
 
 
-@dataclass
 class MiningModeLPM(MinerConfigValue):
     mode: str = field(init=False, default="low")
 
@@ -127,7 +128,6 @@ class MiningModeLPM(MinerConfigValue):
         return {"settings": {"level": 1}}
 
 
-@dataclass
 class MiningModeHPM(MinerConfigValue):
     mode: str = field(init=False, default="high")
 
@@ -147,12 +147,14 @@ class MiningModeHPM(MinerConfigValue):
         return {"mode": {"mode": "turbo"}}
 
 
-@dataclass
 class MiningModePowerTune(MinerConfigValue):
+    class Config:
+        arbitrary_types_allowed = True
+
     mode: str = field(init=False, default="power_tuning")
-    power: int = None
-    algo: TunerAlgo = field(default_factory=TunerAlgo.default)
-    scaling: ScalingConfig = None
+    power: int | None = None
+    algo: TunerAlgoType = field(default_factory=TunerAlgo.default)
+    scaling: ScalingConfig | None = None
 
     @classmethod
     def from_dict(cls, dict_conf: dict | None) -> "MiningModePowerTune":
@@ -198,7 +200,7 @@ class MiningModePowerTune(MinerConfigValue):
     def as_boser(self) -> dict:
         cfg = {
             "set_performance_mode": SetPerformanceModeRequest(
-                save_action=SaveAction.SAVE_ACTION_SAVE_AND_APPLY,
+                save_action=SaveAction.SAVE_AND_APPLY,
                 mode=PerformanceMode(
                     tuner_mode=TunerPerformanceMode(
                         power_target=PowerTargetMode(
@@ -240,12 +242,17 @@ class MiningModePowerTune(MinerConfigValue):
             }
         }
 
+    def as_luxos(self) -> dict:
+        return {"autotunerset": {"enabled": True}}
 
-@dataclass
+
 class MiningModeHashrateTune(MinerConfigValue):
+    class Config:
+        arbitrary_types_allowed = True
+
     mode: str = field(init=False, default="hashrate_tuning")
     hashrate: int = None
-    algo: TunerAlgo = field(default_factory=TunerAlgo.default)
+    algo: TunerAlgoType = field(default_factory=TunerAlgo.default)
     scaling: ScalingConfig = None
 
     @classmethod
@@ -275,7 +282,7 @@ class MiningModeHashrateTune(MinerConfigValue):
     def as_boser(self) -> dict:
         cfg = {
             "set_performance_mode": SetPerformanceModeRequest(
-                save_action=SaveAction.SAVE_ACTION_SAVE_AND_APPLY,
+                save_action=SaveAction.SAVE_AND_APPLY,
                 mode=PerformanceMode(
                     tuner_mode=TunerPerformanceMode(
                         hashrate_target=HashrateTargetMode(
@@ -333,8 +340,10 @@ class MiningModeHashrateTune(MinerConfigValue):
             }
         }
 
+    def as_luxos(self) -> dict:
+        return {"autotunerset": {"enabled": True}}
 
-@dataclass
+
 class ManualBoardSettings(MinerConfigValue):
     freq: float
     volt: float
@@ -349,7 +358,6 @@ class ManualBoardSettings(MinerConfigValue):
         return {"miner-mode": 0}
 
 
-@dataclass
 class MiningModeManual(MinerConfigValue):
     mode: str = field(init=False, default="manual")
 
@@ -512,7 +520,7 @@ class MiningModeConfig(MinerConfigOption):
         if autotuning_conf.get("psu_power_limit") is not None:
             # old autotuning conf
             return cls.power_tuning(
-                autotuning_conf["psu_power_limit"],
+                power=autotuning_conf["psu_power_limit"],
                 scaling=ScalingConfig.from_bosminer(toml_conf, mode="power"),
             )
         if autotuning_conf.get("mode") is not None:
@@ -521,7 +529,7 @@ class MiningModeConfig(MinerConfigOption):
             if mode == "power_target":
                 if autotuning_conf.get("power_target") is not None:
                     return cls.power_tuning(
-                        autotuning_conf["power_target"],
+                        power=autotuning_conf["power_target"],
                         scaling=ScalingConfig.from_bosminer(toml_conf, mode="power"),
                     )
                 return cls.power_tuning(
@@ -530,7 +538,7 @@ class MiningModeConfig(MinerConfigOption):
             if mode == "hashrate_target":
                 if autotuning_conf.get("hashrate_target") is not None:
                     return cls.hashrate_tuning(
-                        autotuning_conf["hashrate_target"],
+                        hashrate=autotuning_conf["hashrate_target"],
                         scaling=ScalingConfig.from_bosminer(toml_conf, mode="hashrate"),
                     )
                 return cls.hashrate_tuning(
@@ -547,7 +555,7 @@ class MiningModeConfig(MinerConfigOption):
         if mode_settings["preset"] == "disabled":
             return MiningModeManual.from_vnish(mode_settings)
         else:
-            return cls.power_tuning(int(mode_settings["preset"]))
+            return cls.power_tuning(power=int(mode_settings["preset"]))
 
     @classmethod
     def from_boser(cls, grpc_miner_conf: dict):
@@ -562,7 +570,7 @@ class MiningModeConfig(MinerConfigOption):
             if tuner_conf["tunerMode"] == 1:
                 if tuner_conf.get("powerTarget") is not None:
                     return cls.power_tuning(
-                        tuner_conf["powerTarget"]["watt"],
+                        power=tuner_conf["powerTarget"]["watt"],
                         scaling=ScalingConfig.from_boser(grpc_miner_conf, mode="power"),
                     )
                 return cls.power_tuning(
@@ -572,7 +580,7 @@ class MiningModeConfig(MinerConfigOption):
             if tuner_conf["tunerMode"] == 2:
                 if tuner_conf.get("hashrateTarget") is not None:
                     return cls.hashrate_tuning(
-                        int(tuner_conf["hashrateTarget"]["terahashPerSecond"]),
+                        hashrate=int(tuner_conf["hashrateTarget"]["terahashPerSecond"]),
                         scaling=ScalingConfig.from_boser(
                             grpc_miner_conf, mode="hashrate"
                         ),
@@ -583,13 +591,13 @@ class MiningModeConfig(MinerConfigOption):
 
         if tuner_conf.get("powerTarget") is not None:
             return cls.power_tuning(
-                tuner_conf["powerTarget"]["watt"],
+                power=tuner_conf["powerTarget"]["watt"],
                 scaling=ScalingConfig.from_boser(grpc_miner_conf, mode="power"),
             )
 
         if tuner_conf.get("hashrateTarget") is not None:
             return cls.hashrate_tuning(
-                int(tuner_conf["hashrateTarget"]["terahashPerSecond"]),
+                hashrate=int(tuner_conf["hashrateTarget"]["terahashPerSecond"]),
                 scaling=ScalingConfig.from_boser(grpc_miner_conf, mode="hashrate"),
             )
 
@@ -608,9 +616,9 @@ class MiningModeConfig(MinerConfigOption):
             if mode_data.get("Mode") == "turbo":
                 return cls.high()
             if mode_data.get("Ths") is not None:
-                return cls.hashrate_tuning(mode_data["Ths"])
+                return cls.hashrate_tuning(hashrate=mode_data["Ths"])
             if mode_data.get("Power") is not None:
-                return cls.power_tuning(mode_data["Power"])
+                return cls.power_tuning(power=mode_data["Power"])
         except LookupError:
             return cls.default()
 
@@ -638,3 +646,17 @@ class MiningModeConfig(MinerConfigOption):
         except LookupError:
             pass
         return cls.default()
+
+
+MiningMode = TypeVar(
+    "MiningMode",
+    bound=Union[
+        MiningModeNormal,
+        MiningModeHPM,
+        MiningModeLPM,
+        MiningModeSleep,
+        MiningModeManual,
+        MiningModePowerTune,
+        MiningModeHashrateTune,
+    ],
+)
